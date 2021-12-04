@@ -14,13 +14,34 @@ import (
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	vfs "github.com/twpayne/go-vfs/v4"
 	"github.com/twpayne/go-vfs/v4/vfst"
 
+	"github.com/twpayne/chezmoi/v2/internal/archive"
 	"github.com/twpayne/chezmoi/v2/internal/chezmoitest"
 )
+
+func TestArchiveGitIgnorePatterns(t *testing.T) {
+	data, err := archive.NewTar(map[string]interface{}{
+		".gitignore": "foo\n",
+		"dir": map[string]interface{}{
+			".gitignore": "bar\n",
+		},
+	})
+	require.NoError(t, err)
+
+	expectedMatcher := gitignore.NewMatcher([]gitignore.Pattern{
+		gitignore.ParsePattern("foo", []string{}),
+		gitignore.ParsePattern("bar", []string{"dir"}),
+	})
+
+	actualMatcher, err := newArchiveGitIgnoreMatcher(data, ArchiveFormatTar)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMatcher, actualMatcher)
+}
 
 func TestSourceStateAdd(t *testing.T) {
 	for _, tc := range []struct {

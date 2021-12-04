@@ -755,15 +755,15 @@ externals to be included on different machines.
 
 Entries are indexed by target name relative to the directory of the
 `.chezmoiexternal.<format>` file, and must have a `type` and a `url` field.
-`type` can be either `file` or `archive`. If the entry's parent directories do
-not already exist in the source state then chezmoi will create them as regular
-directories.
+`type` can be either `file`, `archive`, or `git-archive`. If the entry's parent
+directories do not already exist in the source state then chezmoi will create
+them as regular directories.
 
 Entries may have the following fields:
 
 | Variable          | Type     | Default value | Description                                                   |
 | ----------------- | -------- | ------------- | ------------------------------------------------------------- |
-| `type`            | string   | *none*        | External type (`file` or `archive`)                           |
+| `type`            | string   | *none*        | External type (`file`, `archive`, or `git-archive`)           |
 | `encrypted`       | bool     | `false`       | Whether the external is encrypted                             |
 | `exact`           | bool     | `false`       | Add `exact_` attribute to directories in archive              |
 | `executable`      | bool     | `false`       | Add `executable_` attribute to file                           |
@@ -785,15 +785,18 @@ If `type` is `file` then the target is a file with the contents of `url`. The
 optional boolean field `executable` may be set, in which case the target file
 will be executable.
 
-If `type` is `archive` then the target is a directory with the contents of the
-archive at `url`. The optional boolean field `exact` may be set, in which case
-the directory and all subdirectories will be treated as exact directories, i.e.
-`chezmoi apply` will remove entries not present in the archive. The optional
-integer field `stripComponents` will remove leading path components from the
-members of archive. The optional string field `format` sets the archive format.
-The supported archive formats are `tar`, `tar.gz`, `tgz`, `tar.bz2`, `tbz2`, and
-`zip`. If `format` is not specified then chezmoi will guess the format using
-firstly the path of the URL and secondly its contents.
+If `type` is `archive` or `git-archive` then the target is a directory with the
+contents of the archive at `url`. The optional boolean field `exact` may be set,
+in which case the directory and all subdirectories will be treated as exact
+directories, i.e. `chezmoi apply` will remove entries not present in the
+archive. The optional integer field `stripComponents` will remove leading path
+components from the members of archive. The optional string field `format` sets
+the archive format. The supported archive formats are `tar`, `tar.gz`, `tgz`,
+`tar.bz2`, `tbz2`, and `zip`. If `format` is not specified then chezmoi will
+guess the format using firstly the path of the URL and secondly its contents.
+
+For types of `git-archive`, chezmoi will not include entries that match
+`.gitignore` files in the archive.
 
 By default, chezmoi will cache downloaded URLs. The optional duration
 `refreshPeriod` field specifies how often chezmoi will re-download the URL. The

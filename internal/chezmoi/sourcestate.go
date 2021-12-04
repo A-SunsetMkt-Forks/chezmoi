@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	vfs "github.com/twpayne/go-vfs/v4"
@@ -36,8 +37,9 @@ type ExternalType string
 
 // ExternalTypes.
 const (
-	ExternalTypeArchive ExternalType = "archive"
-	ExternalTypeFile    ExternalType = "file"
+	ExternalTypeArchive    ExternalType = "archive"
+	ExternalTypeFile       ExternalType = "file"
+	ExternalTypeGitArchive ExternalType = "git-archive"
 )
 
 // An External is an external source.
@@ -1639,6 +1641,8 @@ func (s *SourceState) readExternal(
 ) (map[RelPath][]SourceStateEntry, error) {
 	switch external.Type {
 	case ExternalTypeArchive:
+		fallthrough
+	case ExternalTypeGitArchive:
 		return s.readExternalArchive(ctx, externalRelPath, parentSourceRelPath, external, options)
 	case ExternalTypeFile:
 		return s.readExternalFile(ctx, externalRelPath, parentSourceRelPath, external, options)
@@ -1687,10 +1691,28 @@ func (s *SourceState) readExternalArchive(
 		format = GuessArchiveFormat(urlPath, data)
 	}
 
+	var matcher gitignore.Matcher
+	if external.Type == ExternalTypeGitArchive {
+		matcher, err = newArchiveGitIgnoreMatcher(data, format)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	sourceRelPaths := make(map[RelPath]SourceRelPath)
 	if err := WalkArchive(data, format, func(name string, fileInfo fs.FileInfo, r io.Reader, linkname string) error {
+		components := strings.Split(name, "/")
+
+		if external.Type == ExternalTypeGitArchive {
+			if matcher.Match(components, fileInfo.IsDir()) {
+				if fileInfo.IsDir() {
+					return Skip
+				}
+				return nil
+			}
+		}
+
 		if external.StripComponents > 0 {
-			components := strings.Split(name, "/")
 			if len(components) <= external.StripComponents {
 				return nil
 			}
@@ -1933,4 +1955,34 @@ func allEquivalentDirs(sourceStateEntries []SourceStateEntry) bool {
 		}
 	}
 	return true
+}
+
+// newArchiveGitIgnoreMatcher returns a matcher that matches all .gitignore
+// patterns in the archive in data.
+func newArchiveGitIgnoreMatcher(data []byte, format ArchiveFormat) (gitignore.Matcher, error) {
+	var patterns []gitignore.Pattern
+	walkFunc := func(name string, fileInfo fs.FileInfo, r io.Reader, linkname string) error {
+		if !fileInfo.Mode().IsRegular() || fileInfo.Name() != ".gitignore" {
+			return nil
+		}
+		domain := strings.Split(name, "/")
+		domain = domain[:len(domain)-1]
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			text := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(text, "#") {
+				continue
+			}
+			pattern := gitignore.ParsePattern(text, domain)
+			patterns = append(patterns, pattern)
+		}
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err := WalkArchive(data, format, walkFunc); err != nil {
+		return nil, err
+	}
+	return gitignore.NewMatcher(patterns), nil
 }

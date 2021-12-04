@@ -116,6 +116,8 @@ func isTarArchive(r io.Reader) bool {
 // walkArchiveTar walks over all the entries in a tar archive.
 func walkArchiveTar(r io.Reader, f WalkArchiveFunc) error {
 	tarReader := tar.NewReader(r)
+	var skipPrefixes []string
+FOR:
 	for {
 		header, err := tarReader.Next()
 		switch {
@@ -124,12 +126,19 @@ func walkArchiveTar(r io.Reader, f WalkArchiveFunc) error {
 		case err != nil:
 			return err
 		}
+		for _, skipPrefix := range skipPrefixes {
+			if strings.HasPrefix(header.Name, skipPrefix) {
+				continue FOR
+			}
+		}
 		name := strings.TrimSuffix(header.Name, "/")
 		switch header.Typeflag {
 		case tar.TypeDir, tar.TypeReg:
 			switch err := f(name, header.FileInfo(), tarReader, ""); {
 			case errors.Is(err, Break):
 				return nil
+			case errors.Is(err, Skip):
+				skipPrefixes = append(skipPrefixes, header.Name)
 			case err != nil:
 				return err
 			}
