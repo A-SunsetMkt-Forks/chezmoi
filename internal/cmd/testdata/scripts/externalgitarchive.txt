@@ -7,6 +7,16 @@ chezmoi apply --force
 cmp $HOME/.dir/file golden/file
 ! exists $HOME/.dir/ignore
 
+chhome home2/user
+
+# test that chezmoi apply reads another git-external
+chezmoi apply --force
+
+chhome home3/user
+
+# test that chezmoi apply reads another git-external
+chezmoi apply --force
+
 -- archive/.gitignore --
 ignore
 -- archive/dir/file --
@@ -20,4 +30,14 @@ ignore
     type: git-archive
     url: "{{ env "HTTPD_URL" }}/archive.tar.gz"
     stripComponents: 2
+-- home2/user/.local/share/chezmoi/.chezmoiexternal.yaml --
+".oh-my-zsh":
+  type: git-archive
+  url: "https://github.com/ohmyzsh/ohmyzsh/archive/5b987e59d0fce1a74bcfd51750c6f52d7c29c647.tar.gz"
+  stripComponents: 1
+-- home3/user/.local/share/chezmoi/.chezmoiexternal.yaml --
+".oh-my-zsh":
+  type: git-archive
+  url: "https://github.com/ohmyzsh/ohmyzsh/archive/5b987e59d0fce1a74bcfd51750c6f52d7c29c647.zip"
+  stripComponents: 1
 -- www/.keep --

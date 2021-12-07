@@ -162,6 +162,8 @@ func walkArchiveZip(r io.ReaderAt, size int64, f WalkArchiveFunc) error {
 	if err != nil {
 		return err
 	}
+	var skipPrefixes []string
+FOR:
 	for _, zipFile := range zipReader.File {
 		zipFileReader, err := zipFile.Open()
 		if err != nil {
@@ -170,6 +172,11 @@ func walkArchiveZip(r io.ReaderAt, size int64, f WalkArchiveFunc) error {
 		name := path.Clean(zipFile.Name)
 		if strings.HasPrefix(name, "../") || strings.Contains(name, "/../") {
 			return fmt.Errorf("%s: invalid filename", zipFile.Name)
+		}
+		for _, skipPrefix := range skipPrefixes {
+			if strings.HasPrefix(name, skipPrefix) {
+				continue FOR
+			}
 		}
 		switch fileInfo := zipFile.FileInfo(); fileInfo.Mode() & fs.ModeType {
 		case 0:
@@ -188,6 +195,8 @@ func walkArchiveZip(r io.ReaderAt, size int64, f WalkArchiveFunc) error {
 		switch {
 		case errors.Is(err, Break):
 			return nil
+		case errors.Is(err, Skip):
+			skipPrefixes = append(skipPrefixes, name)
 		case err != nil:
 			return err
 		}
